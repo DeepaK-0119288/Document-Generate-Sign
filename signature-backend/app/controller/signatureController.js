@@ -14,7 +14,7 @@ import { roles, status, signStatus } from '../constants/index.js';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import libre from 'libreoffice-convert';
-
+import { title } from 'process';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -83,6 +83,7 @@ export const sendForSignature = async (req, res, next) => {
 
         const io = req.app.get('io'); 
         io.emit('newRequestAssigned', {
+            title: updatedTemplate.templateName,
             officerId: officerId,
         });
 
@@ -184,15 +185,7 @@ export const signRequest = async (req, res, next) => {
         let currentDocumentCount = 0;
         for (const document of request.data) {
             if (document.signStatus === signStatus.rejected) {
-                signedDocuments.push(document);
-                currentDocumentCount++;
-                io.emit('requestInProcess', {
-                    requestId: id,
-                    current: currentDocumentCount,
-                    total: totalNonRejected,
-                    createdBy: request.createdBy,
-                    assignedTo: request.assignedTo,
-                });
+                signedDocuments.push(document); 
                 continue;
             }
             const content = fs.readFileSync(docxPath, 'binary');
@@ -294,7 +287,7 @@ export const signRequest = async (req, res, next) => {
                 current: currentDocumentCount,
                 total: totalNonRejected,
                 createdBy: request.createdBy,
-                assignedTo: request.assignedTo,
+                officerId: request.assignedTo,
             });
         }
 
@@ -501,12 +494,15 @@ export const delegateRequest = async (req, res, next) => {
             { id },
             {
                 $set: {
-                    signStatus: signStatus.delegated, 
-                    deligatedTo: readerId,
+                    signStatus: signStatus.delegated,
+                    delegatedTo: readerId,
                     updatedBy: req.session.userId,
                     updatedAt: new Date(),
-                    'data.$[].signStatus': signStatus.delegated
+                    'data.$[elem].signStatus': signStatus.delegated
                 },
+            },
+            {
+                arrayFilters: [{ 'elem.signStatus': { $ne: signStatus.rejected } }]
             }
         );
 

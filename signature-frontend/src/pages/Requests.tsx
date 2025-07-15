@@ -123,7 +123,7 @@ const Requests: React.FC = () => {
     }
   };
 
-  const handleRequestInProcess = async (data: {requestId: string; current: number; total: number }) => {
+  const handleRequestInProcess = async (data: { requestId: string; current: number; total: number; createdBy: string; assignedTo: string }) => {
     try {
       setSigningProgress((prev) => ({
         ...prev,
@@ -380,13 +380,41 @@ const Requests: React.FC = () => {
     fetchRequests();
     fetchOfficers();
 
-    socket.on("newRequestAssigned", handleNewRequest);
-    socket.on("documentRejected", handleDocumentRejected);
-    socket.on("requestRejected", handleRequestRejected);
-    socket.on("requestDelegated", handleRequestDelegated);
-    socket.on("requestInProcess", handleRequestInProcess);
-    socket.on("requestSigned", fetchRequests);
-    socket.on("requestDispatched", fetchRequests);
+    socket.on("newRequestAssigned", (data) => {
+      if (userId === data.officerId) {
+        handleNewRequest(data);
+      }
+    });
+    socket.on("documentRejected", (data) => {
+      if (userId === data.createdBy) {
+        handleDocumentRejected(data);
+      }
+    });
+    socket.on("requestRejected", (data) => {
+      if (userId === data.createdBy) {
+        handleRequestRejected(data);
+      }
+    });
+    socket.on("requestDelegated", (data) => {
+      if (userId === data.createdBy) {
+        handleRequestDelegated(data);
+      }
+    });
+    socket.on("requestInProcess", (data) => {
+      if (userId === data.createdBy || userId === data.officerId) {
+        handleRequestInProcess(data);
+      }
+    });
+    socket.on("requestSigned", (data) => {
+      if (userId === data.createdBy || userId === data.officerId) {
+        fetchRequests();
+      }
+    });
+    socket.on("requestDispatched", (data) => {
+      if (userId === data.createdBy || userId === data.officerId) {
+        fetchRequests();
+      }
+    });
 
     socket.on("connect_error", (error) => {
       console.error("Socket.IO connection error:", error);
@@ -403,7 +431,7 @@ const Requests: React.FC = () => {
       socket.off("requestDispatched");
       socket.off("connect_error");
     };
-  }, []);
+  }, [userId]);
 
   const getActions = (record: Request) => {
     const menuItems: any[] = [];
@@ -635,12 +663,7 @@ const Requests: React.FC = () => {
             >
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 {displayStatus || "Unknown"}
-                {isInProcess && (
-                  <>
-                    {/* <Spin size="small" /> */}
-                    {progress && `(${progress.current}/${progress.total})`}
-                  </>
-                )}
+                {isInProcess && progress && `(${progress.current}/${progress.total})`}
               </div>
             </Tag>
           </Tooltip>
