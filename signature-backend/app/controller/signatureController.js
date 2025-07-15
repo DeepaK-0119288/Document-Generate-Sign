@@ -154,12 +154,13 @@ export const signRequest = async (req, res, next) => {
         );
 
         const io = req.app.get('io');
+        const totalNonRejected = request.data.filter(doc => doc.signStatus !== signStatus.rejected).length;
         io.emit('requestInProcess', {
             createdBy: request.createdBy,
             officerId: request.assignedTo,
             requestId: id,
             current: 0,
-            total: request.data.length,
+            total: totalNonRejected,
         });
 
         const docxPath = path.resolve(__dirname, '../../', request.url);
@@ -181,7 +182,6 @@ export const signRequest = async (req, res, next) => {
 
         const signedDocuments = [];
         let currentDocumentCount = 0;
-        const totalNonRejected = request.data.filter(doc => doc.signStatus !== signStatus.rejected).length;
         for (const document of request.data) {
             if (document.signStatus === signStatus.rejected) {
                 signedDocuments.push(document);
@@ -292,7 +292,7 @@ export const signRequest = async (req, res, next) => {
             io.emit('requestInProcess', {
                 requestId: id,
                 current: currentDocumentCount,
-                total: request.data.length,
+                total: totalNonRejected,
                 createdBy: request.createdBy,
                 assignedTo: request.assignedTo,
             });
