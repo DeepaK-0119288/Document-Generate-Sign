@@ -358,6 +358,7 @@ const Request: React.FC = () => {
             <Input.TextArea
               placeholder="Enter the reason for rejection"
               rows={4}
+              style={{ resize: 'none' }}
             />
           </Form.Item>
           <div

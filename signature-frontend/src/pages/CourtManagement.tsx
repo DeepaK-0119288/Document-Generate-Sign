@@ -334,14 +334,18 @@ export const CourtManagement: React.FC = () => {
             name="address"
             rules={[{ required: true }]}
           >
-            <Input.TextArea rows={5} placeholder="Enter address" />
+            <Input.TextArea
+              rows={5}
+              placeholder="Enter address"
+              style={{ resize: "none" }}
+            />
           </Form.Item>
           <Form.Item
             label="Description"
             name="description"
             rules={[{ required: true }]}
           >
-            <Input.TextArea rows={5} placeholder="Enter Description" />
+            <Area rows={5} placeholder="Enter Description" />
           </Form.Item>
           <Button
             type="primary"

@@ -302,6 +302,21 @@ export class RequestClient extends Client {
     }
   }
 
+  async deleteSignature(signatureId: string) {
+    try {
+      const res = await this.request('DELETE', `/api/signatures/${signatureId}`);
+      const parsedData = signatureSchema.safeParse(res.data);
+      if (!parsedData.success) {
+        console.error('deleteSignature parse error:', parsedData.error);
+        throw new Error('Invalid data from backend');
+      }
+      return parsedData.data;
+    } catch (error) {
+      console.error('deleteSignature error:', error);
+      throw error;
+    }
+  }
+
   async printRequest(requestId: string) {
     try {
       const res = await this.request('POST', `/api/requests/${requestId}/print`, {

@@ -93,7 +93,7 @@ const Requests: React.FC = () => {
   const handleDocumentRejected = async (data: { createdBy: string | undefined; rejectionReason: string }) => {
     try {
       if (userId === data.createdBy) {
-        message.info(`Document rejected: ${data.rejectionReason}`);
+        message.info(`Document Rejected - Reason:${data.rejectionReason}`);
       }
       await fetchRequests();
     } catch (error) {
@@ -880,6 +880,7 @@ const Requests: React.FC = () => {
             <Input.TextArea
               placeholder="Enter the reason for rejection"
               rows={4}
+              style={{ resize: 'none' }}
             />
           </Form.Item>
           <div
