@@ -7,3 +7,4 @@ data/request_document/*
 data/merged_document/*
 
 app/uploads
+.env
