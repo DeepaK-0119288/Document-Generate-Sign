@@ -11,7 +11,6 @@ import { roles, status, signStatus } from '../constants/index.js';
 export const convertToPDF = async (req, res, next) => {
   try {
     const { id } = req.params;
-    // console.log(id);
     const userRole = req.session.role;
     const userId = req.session.userId;
 

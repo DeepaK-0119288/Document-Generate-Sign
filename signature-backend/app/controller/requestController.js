@@ -16,6 +16,7 @@ const __dirname = dirname(__filename);
 export const createRequest = async (req, res, next) => {
   try {
     const file = req.file;
+    // console.log(req.session.userId, 'Session User ID');
 
     const body = await RequestCreationSchema.safeParseAsync({
       title: req.body.title,

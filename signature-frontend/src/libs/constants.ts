@@ -1,4 +1,3 @@
-/* eslint-disable no-unused-vars */
 export enum roles {
 	admin = 1,
 	officer = 2,
@@ -24,7 +23,7 @@ export enum roles {
   
   export const signStatusDisplay: Record<signStatus, string> = {
 	[signStatus.unsigned]: "Draft",
-	[signStatus.readForSign]: "Ready for Signature",
+	[signStatus.readForSign]: "Waiting for Signature",
 	[signStatus.rejected]: "Rejected",
 	[signStatus.delegated]: "Delegated",
 	[signStatus.inProcess]: "In Process",

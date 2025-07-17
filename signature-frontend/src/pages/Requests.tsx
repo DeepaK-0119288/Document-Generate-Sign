@@ -1,681 +1,64 @@
-import React, { useEffect, useState } from "react";
-import {
-  Button,
-  Drawer,
-  Menu,
-  Dropdown,
-  Select,
-  Tag,
-  message,
-  Form,
-  Input,
-  Upload,
-  Tooltip,
-  Spin,
-} from "antd";
-import { UploadOutlined, MoreOutlined } from "@ant-design/icons";
-import CustomTable from "../components/CustomTable";
+import React, { useState } from "react";
+import { Button, Input } from "antd";
 import MainAreaLayout from "../components/main-layout/main-layout";
-import { useNavigate } from "react-router";
-import { requestClient, useAppStore } from "../store";
-import { AxiosError } from "axios";
-import { roles, signStatus, signStatusDisplay } from "../libs/constants";
-import { Request, Officer, Signature } from "../@types/interfaces/Requests";
-import socket from "../client/socket";
-
-const backendUrl = import.meta.env.VITE_BACKEND_URL;
+import RequestTable from "../components/Requests/RequestTable";
+import SendDrawer from "../components/Requests/SendDrawer";
+import CreateDrawer from "../components/Requests/CreateDrawer";
+import SignDrawer from "../components/Requests/SignDrawer";
+import RejectDrawer from "../components/Requests/RejectDrawer";
+import { useRequests } from "../hooks/useRequests";
+import { useOfficers } from "../hooks/useOfficers";
+import { useSignatures } from "../hooks/useSignatures";
+import { useSocketEvents } from "../hooks/useSocketEvents";
+import { useRequestActions } from "../hooks/useRequestActions";
+import { Request } from "../@types/interfaces/Requests";
 
 const Requests: React.FC = () => {
-  const navigate = useNavigate();
-  const [requests, setRequests] = useState<Request[]>([]);
-  const [filteredRequests, setFilteredRequests] = useState<Request[]>([]);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [signingRequestId, setSigningRequestId] = useState<string | null>(null);
+  const {
+    filteredRequests,
+    searchQuery,
+    loading,
+    handleSearch,
+    fetchRequests,
+  } = useRequests();
+  const { officers } = useOfficers();
+  const { signatures, fetchSignatures } = useSignatures();
+  const {
+    createRequest,
+    sendForSignature,
+    cloneRequest,
+    deleteRequest,
+    signRequest,
+    dispatchRequest,
+    rejectRequest,
+    printRequest,
+    downloadAll,
+    delegateRequest,
+  } = useRequestActions();
+  useSocketEvents(fetchRequests);
+
   const [isSendDrawerOpen, setIsSendDrawerOpen] = useState(false);
   const [isCreateDrawerOpen, setIsCreateDrawerOpen] = useState(false);
   const [isSignDrawerOpen, setIsSignDrawerOpen] = useState(false);
   const [isRejectDrawerOpen, setIsRejectDrawerOpen] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<Request | null>(null);
-  const [officers, setOfficers] = useState<Officer[]>([]);
-  const [signatures, setSignatures] = useState<Signature[]>([]);
-  const [signForm] = Form.useForm();
-  const [sendForm] = Form.useForm();
-  const [createForm] = Form.useForm();
-  const [rejectForm] = Form.useForm();
-  const [signingProgress, setSigningProgress] = useState<{ [key: string]: { current: number; total: number } }>({});
-  const { session } = useAppStore();
-  const userRole = session?.role;
-  const userId = session?.userId;
-  const isReader = userRole === roles.reader;
+  const [signingRequestId, setSigningRequestId] = useState<string | null>(null);
 
-  const fetchRequests = async () => {
-    try {
-      setLoading(true);
-      const data = await requestClient.getRequests();
-      const sortedRequests = (data as Request[]).sort(
-        (a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      );
-      const mappedData = sortedRequests.map((req: any) => ({
-        ...req,
-        rawStatus: req.status
-          ? Number(
-              Object.keys(signStatusDisplay).find(
-                (key) =>
-                  signStatusDisplay[
-                    key as unknown as keyof typeof signStatusDisplay
-                  ] === req.status
-              )
-            )
-          : signStatus.unsigned,
-      }));
-      setRequests(mappedData);
-      setFilteredRequests(mappedData);
-    } catch (error) {
-      handleError(error, "Failed to fetch requests");
-    } finally {
-      setLoading(false);
-    }
+  const handleSend = (record: Request) => {
+    setSelectedRequest(record);
+    setIsSendDrawerOpen(true);
   };
 
-  const handleNewRequest = async (data: { officerId: string | undefined; title: any }) => {
-    try {
-      if (userId === data.officerId) {
-        message.info(`New request assigned: ${data.title}`);
-      }
-      await fetchRequests();
-    } catch (error) {
-      handleError(error, "Failed to process new request");
-    }
+  const handleSign = (record: Request) => {
+    setSelectedRequest(record);
+    setIsSignDrawerOpen(true);
+    fetchSignatures();
   };
 
-  const handleDocumentRejected = async (data: { createdBy: string | undefined; rejectionReason: string }) => {
-    try {
-      if (userId === data.createdBy) {
-        message.info(`Document Rejected - Reason:${data.rejectionReason}`);
-      }
-      await fetchRequests();
-    } catch (error) {
-      handleError(error, "Failed to process document rejection");
-    }
+  const handleReject = (record: Request) => {
+    setSelectedRequest(record);
+    setIsRejectDrawerOpen(true);
   };
-
-  const handleRequestRejected = async (data: { createdBy: string | undefined; rejectionReason: string }) => {
-    try {
-      if (userId === data.createdBy) {
-        message.info(`Request rejected: ${data.rejectionReason}`);
-      }
-      await fetchRequests();
-    } catch (error) {
-      handleError(error, "Failed to process request rejection");
-    }
-  };
-
-  const handleRequestDelegated = async (data: { requestId: string; createdBy: string | undefined }) => {
-    try {
-      if (userId === data.createdBy) {
-        message.info(`Request delegated successfully!`);
-      }
-      await fetchRequests();
-    } catch (error) {
-      handleError(error, "Failed to process request delegation");
-    }
-  };
-
-  const handleRequestInProcess = async (data: { requestId: string; current: number; total: number; createdBy: string; assignedTo: string }) => {
-    try {
-      setSigningProgress((prev) => ({
-        ...prev,
-        [data.requestId]: { current: data.current, total: data.total },
-      }));
-      await fetchRequests();
-    } catch (error) {
-      handleError(error, "Failed to process in-progress update");
-    }
-  };
-
-  const fetchOfficers = async () => {
-    try {
-      const data = await requestClient.getOfficers();
-      setOfficers(data);
-    } catch (error) {
-      console.error("fetchOfficers error:", error);
-      handleError(error, "Failed to fetch officers. Please try again later.");
-    }
-  };
-
-  const fetchSignatures = async () => {
-    try {
-      const data = await requestClient.getSignatures();
-      setSignatures(
-        data.map((item) => ({
-          id: item.id,
-          name: item.userId,
-          url: item.url,
-          createdAt: item.createdBy,
-        }))
-      );
-    } catch (error: any) {
-      if (!error.message.includes("404")) {
-        message.error("Failed to fetch signatures");
-      }
-      setSignatures([]);
-    }
-  };
-
-  const handleSearch = (value: string) => {
-    setSearchQuery(value);
-    const filtered = requests.filter((request) =>
-      request.title.toLowerCase().includes(value.toLowerCase())
-    );
-    setFilteredRequests(filtered);
-  };
-
-  const handleAddRequest = () => {
-    setIsCreateDrawerOpen(true);
-    createForm.resetFields();
-  };
-
-  const handleCreateRequest = async () => {
-    try {
-      const values = await createForm.validateFields();
-      setLoading(true);
-      const templateFile = values.templateFile?.[0]?.originFileObj;
-      if (!templateFile) {
-        throw new Error("Please upload a template file");
-      }
-
-      const allowedTypes = [
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "application/msword",
-      ];
-
-      if (!allowedTypes.includes(templateFile.type)) {
-        message.error("Invalid file type. Please upload a .doc or .docx file.");
-        return;
-      }
-
-      await requestClient.createRequest({
-        title: values.title,
-        description: values.description,
-        templateFile,
-      });
-      message.success("Request created successfully!");
-      await fetchRequests();
-      setIsCreateDrawerOpen(false);
-      createForm.resetFields();
-    } catch (error) {
-      console.error("handleCreateRequest error:", error);
-      handleError(error, "Failed to create request");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSendForSignature = async () => {
-    try {
-      const values = await sendForm.validateFields();
-      setLoading(true);
-      await requestClient.sendForSignature(selectedRequest!.id, {
-        officerId: values.officerId,
-      });
-      message.success("Request sent for signature!");
-      await fetchRequests();
-      setIsSendDrawerOpen(false);
-      sendForm.resetFields();
-      setSelectedRequest(null);
-    } catch (error) {
-      console.error("handleSendForSignature error:", error);
-      handleError(error, "Failed to send request for signature");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleCloneRequest = async (id: string) => {
-    try {
-      setLoading(true);
-      await requestClient.cloneRequest(id);
-      message.success("Request cloned successfully!");
-      await fetchRequests();
-    } catch (error) {
-      console.error("handleCloneRequest error:", error);
-      handleError(error, "Failed to clone request");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDeleteRequest = async (id: string) => {
-    try {
-      setLoading(true);
-      await requestClient.deleteRequest(id);
-      message.success("Request deleted successfully!");
-      setRequests((prev) => prev.filter((req) => req.id !== id));
-      setFilteredRequests((prev) => prev.filter((req) => req.id !== id));
-    } catch (error) {
-      console.error("handleDeleteRequest error:", error);
-      handleError(error, "Failed to delete request");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSignRequest = async () => {
-    try {
-      const values = await signForm.validateFields();
-      const requestId = selectedRequest!.id;
-      setSigningRequestId(requestId);
-      await requestClient.signRequest(requestId, values.signatureId);
-      message.success("Request signed successfully!");
-      setIsSignDrawerOpen(false);
-      signForm.resetFields();
-      setSelectedRequest(null);
-    } catch (error) {
-      console.error("handleSignRequest error:", error);
-      handleError(error, "Failed to sign request");
-      await fetchRequests();
-    } finally {
-      setSigningRequestId(null);
-    }
-  };
-
-  const handleDispatch = async (id: string) => {
-    try {
-      setLoading(true);
-      await requestClient.dispatchRequest(id);
-      message.success("Request dispatched successfully!");
-      await fetchRequests();
-    } catch (error) {
-      console.error("handleDispatch error:", error);
-      handleError(error, "Failed to dispatch request");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleRejectRequest = async () => {
-    try {
-      const values = await rejectForm.validateFields();
-      setLoading(true);
-      await requestClient.rejectRequest(
-        selectedRequest!.id,
-        values.rejectionReason
-      );
-      message.success("Request rejected successfully!");
-      await fetchRequests();
-      setIsRejectDrawerOpen(false);
-      rejectForm.resetFields();
-      setSelectedRequest(null);
-    } catch (error) {
-      console.error("handleRejectRequest error:", error);
-      handleError(error, "Failed to reject request");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handlePrintRequest = async (requestId: string) => {
-    try {
-      const pdfBlob = await requestClient.printRequest(requestId);
-      const url = URL.createObjectURL(pdfBlob);
-      const printWindow = window.open(url);
-      if (printWindow) {
-        printWindow.onload = () => {
-          printWindow.print();
-          printWindow.onbeforeunload = () => URL.revokeObjectURL(url);
-        };
-      } else {
-        message.error("Failed to open print window");
-      }
-    } catch (error) {
-      console.error("handlePrintRequest error:", error);
-      handleError(error, "Failed to print documents");
-    }
-  };
-
-  const handleDownloadAll = async (requestId: string, requestTitle: string) => {
-    try {
-      const zipBlob = await requestClient.downloadZip(requestId);
-      const url = URL.createObjectURL(zipBlob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `${requestTitle}_signed_documents.zip`;
-      link.click();
-      URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error("handleDownloadAll error:", error);
-      handleError(error, "Failed to download ZIP");
-    }
-  };
-
-  const handleDelegateRequest = async (id: string) => {
-    try {
-      setLoading(true);
-      await requestClient.delegateRequest(id);
-      message.success("Request delegated successfully!");
-      await fetchRequests();
-    } catch (error) {
-      console.error("handleDelegateRequest error:", error);
-      handleError(error, "Failed to delegate request");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleError = (error: unknown, fallbackMsg: string) => {
-    if (error instanceof AxiosError) {
-      message.error(error.response?.data?.error || fallbackMsg);
-      return;
-    }
-    if (error instanceof Error) {
-      message.error(error.message);
-      return;
-    }
-    message.error(fallbackMsg);
-  };
-
-  useEffect(() => {
-    fetchRequests();
-    fetchOfficers();
-
-    socket.on("newRequestAssigned", (data) => {
-      if (userId === data.officerId) {
-        handleNewRequest(data);
-      }
-    });
-    socket.on("documentRejected", (data) => {
-      if (userId === data.createdBy) {
-        handleDocumentRejected(data);
-      }
-    });
-    socket.on("requestRejected", (data) => {
-      if (userId === data.createdBy) {
-        handleRequestRejected(data);
-      }
-    });
-    socket.on("requestDelegated", (data) => {
-      if (userId === data.createdBy) {
-        handleRequestDelegated(data);
-      }
-    });
-    socket.on("requestInProcess", (data) => {
-      if (userId === data.createdBy || userId === data.officerId) {
-        handleRequestInProcess(data);
-      }
-    });
-    socket.on("requestSigned", (data) => {
-      if (userId === data.createdBy || userId === data.officerId) {
-        fetchRequests();
-      }
-    });
-    socket.on("requestDispatched", (data) => {
-      if (userId === data.createdBy || userId === data.officerId) {
-        fetchRequests();
-      }
-    });
-
-    socket.on("connect_error", (error) => {
-      console.error("Socket.IO connection error:", error);
-      message.error("Failed to connect to real-time updates. Please refresh the page.");
-    });
-
-    return () => {
-      socket.off("newRequestAssigned");
-      socket.off("documentRejected");
-      socket.off("requestRejected");
-      socket.off("requestDelegated");
-      socket.off("requestInProcess");
-      socket.off("requestSigned");
-      socket.off("requestDispatched");
-      socket.off("connect_error");
-    };
-  }, [userId]);
-
-  const getActions = (record: Request) => {
-    const menuItems: any[] = [];
-
-    menuItems.push({
-      key: "clone",
-      label: "Clone",
-      onClick: () => handleCloneRequest(record.id),
-    });
-
-    if (record.rawStatus === signStatus.unsigned) {
-      menuItems.push(
-        {
-          key: "send",
-          label: "Send for Signature",
-          disabled: record.documentCount === 0 || officers.length === 0,
-          onClick: () => {
-            setSelectedRequest(record);
-            setIsSendDrawerOpen(true);
-          },
-        },
-        {
-          key: "delete",
-          label: "Delete",
-          danger: true,
-          onClick: () => handleDeleteRequest(record.id),
-        }
-      );
-    } else if (
-      record.rawStatus === signStatus.delegated &&
-      record.createdBy == userId
-    ) {
-      menuItems.push({
-        key: "sign",
-        label: "Sign",
-        disabled: signingRequestId === record.id,
-        onClick: () => {
-          setSelectedRequest(record);
-          setIsSignDrawerOpen(true);
-          fetchSignatures();
-        },
-      });
-    } else if (
-      record.rawStatus === signStatus.readForSign &&
-      !isReader &&
-      record.createdBy != userId
-    ) {
-      menuItems.push(
-        {
-          key: "sign",
-          label: "Sign",
-          disabled: signingRequestId === record.id,
-          onClick: () => {
-            setSelectedRequest(record);
-            setIsSignDrawerOpen(true);
-            fetchSignatures();
-          },
-        },
-        {
-          key: "reject",
-          label: "Reject",
-          danger: true,
-          onClick: () => {
-            setSelectedRequest(record);
-            setIsRejectDrawerOpen(true);
-          },
-        },
-        {
-          key: "delegate",
-          label: "Delegate",
-          onClick: () => handleDelegateRequest(record.id),
-        }
-      );
-    } else if (record.rawStatus === signStatus.Signed || record.rawStatus === signStatus.dispatched) {
-      menuItems.push(
-        {
-          key: "print",
-          label: "Print",
-          onClick: () => handlePrintRequest(record.id),
-        },
-        {
-          key: "download",
-          label: "Download All (ZIP)",
-          onClick: () => handleDownloadAll(record.id, record.title),
-        }
-      );
-
-      if (record.createdBy == userId && record.rawStatus === signStatus.Signed) {
-        menuItems.push({
-          key: "dispatch",
-          label: "Dispatch",
-          onClick: () => handleDispatch(record.id),
-        });
-      }
-      if (record.createdBy == userId && record.rawStatus === signStatus.dispatched) {
-        menuItems.push(
-          {
-            key: "dispatchRegister",
-            label: "Dispatch Register",
-            onClick: () => {
-              message.info("Dispatch Register feature is not implemented yet.");
-            },
-          },
-          {
-            key: "dispatchSlip",
-            label: "Dispatch Slip",
-            onClick: () => {
-              message.info("Dispatch Slip feature is not implemented yet.");
-            },
-          }
-        );
-      }
-    }
-
-    const menu = (
-      <Menu
-        items={menuItems.map((item) => ({
-          ...item,
-          onClick: () => {
-            item.onClick?.();
-          },
-          danger: item.danger,
-          disabled: item.disabled,
-        }))}
-      />
-    );
-
-    return (
-      <Dropdown overlay={menu} trigger={["click"]}>
-        <Button icon={<MoreOutlined />} />
-      </Dropdown>
-    );
-  };
-
-  const columns = [
-    {
-      title: "Title",
-      dataIndex: "title",
-      key: "title",
-      render: (text: string, record: Request) => (
-        <Button
-          type="link"
-          onClick={() => navigate(`/dashboard/template/${record.id}`)}
-        >
-          {text}
-        </Button>
-      ),
-    },
-    {
-      title: "Number of Documents",
-      dataIndex: "documentCount",
-      key: "documentCount",
-      render: (count: number, record: Request) => (
-        <Button
-          type="link"
-          onClick={() => navigate(`/dashboard/request/${record.id}`)}
-        >
-          {count}
-        </Button>
-      ),
-    },
-    {
-      title: "Rejected Documents",
-      dataIndex: "rejectedCount",
-      key: "rejectedCount",
-      render: (count: number, record: Request) => (
-        <Button
-          type="link"
-          onClick={() => navigate(`/dashboard/request/${record.id}/rejected`)}
-          disabled={count === 0}
-        >
-          {count}
-        </Button>
-      ),
-    },
-    {
-      title: "Created At",
-      dataIndex: "createdAt",
-      key: "createdAt",
-    },
-    {
-      title: "Request Status",
-      dataIndex: "status",
-      key: "status",
-      render: (_: string, record: Request) => {
-        let displayStatus = record.status;
-        if (record.rawStatus === signStatus.readForSign) {
-          if (record.createdBy === userId) {
-            displayStatus = "Waiting for Signature";
-          } else if (record.assignedTo === userId) {
-            displayStatus = signStatusDisplay[signStatus.readForSign];
-          }
-        } else if (isReader && record.rawStatus === signStatus.Signed) {
-          displayStatus = signStatusDisplay[signStatus.readyForDispatch];
-        }
-        const isInProcess = displayStatus === signStatusDisplay[signStatus.inProcess];
-        const progress = signingProgress[record.id];
-        return (
-          <Tooltip
-            title={
-              record.rawStatus === signStatus.rejected && record.rejectionReason
-                ? `Reason: ${record.rejectionReason}`
-                : isInProcess && progress
-                ? `Signing ${progress.current} of ${progress.total} documents`
-                : ""
-            }
-          >
-            <Tag
-              color={
-                displayStatus === signStatusDisplay[signStatus.unsigned]
-                  ? "blue"
-                  : displayStatus === signStatusDisplay[signStatus.readForSign] ||
-                    displayStatus === "Waiting for Signature"
-                  ? "orange"
-                  : displayStatus === signStatusDisplay[signStatus.rejected]
-                  ? "volcano"
-                  : displayStatus === signStatusDisplay[signStatus.delegated]
-                  ? "blue"
-                  : displayStatus === signStatusDisplay[signStatus.inProcess]
-                  ? "cyan"
-                  : displayStatus === signStatusDisplay[signStatus.Signed]
-                  ? "green"
-                  : displayStatus === signStatusDisplay[signStatus.readyForDispatch]
-                  ? "lime"
-                  : displayStatus === signStatusDisplay[signStatus.dispatched]
-                  ? "purple"
-                  : "default"
-              }
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                {displayStatus || "Unknown"}
-                {isInProcess && progress && `(${progress.current}/${progress.total})`}
-              </div>
-            </Tag>
-          </Tooltip>
-        );
-      },
-    },
-    {
-      title: "Actions",
-      key: "actions",
-      render: (record: Request) => getActions(record),
-    },
-  ];
 
   return (
     <MainAreaLayout
@@ -689,241 +72,100 @@ const Requests: React.FC = () => {
             style={{ width: 200 }}
             allowClear
           />
-          <Button type="primary" onClick={handleAddRequest}>
+          <Button type="primary" onClick={() => setIsCreateDrawerOpen(true)}>
             New Request for Signature
           </Button>
         </div>
       }
     >
-      <CustomTable
-        serialNumberConfig={{ name: "", show: true }}
-        columns={columns}
-        data={filteredRequests}
+      <RequestTable
+        requests={filteredRequests}
         loading={loading}
+        onSend={handleSend}
+        onSign={handleSign}
+        onReject={handleReject}
+        signingRequestId={signingRequestId}
+        onClone={async (id) => {
+          await cloneRequest(id);
+          fetchRequests();
+        }}
+        onDelete={async (id) => {
+          await deleteRequest(id);
+          fetchRequests();
+        }}
+        onDispatch={async (id) => {
+          await dispatchRequest(id);
+          fetchRequests();
+        }}
+        onPrint={printRequest}
+        onDownload={downloadAll}
+        onDelegate={async (id) => {
+          await delegateRequest(id);
+          fetchRequests();
+        }}
       />
-      <Drawer
-        title="Send for Signature"
+      <SendDrawer
         open={isSendDrawerOpen}
         onClose={() => {
           setIsSendDrawerOpen(false);
           setSelectedRequest(null);
-          sendForm.resetFields();
         }}
-        footer={null}
-        width={400}
-      >
-        <Form
-          form={sendForm}
-          layout="vertical"
-          onFinish={handleSendForSignature}
-        >
-          <Form.Item
-            label="Select Officer"
-            name="officerId"
-            rules={[{ required: true, message: "Please select an officer" }]}
-          >
-            <Select
-              placeholder="Select an officer"
-              disabled={officers.length === 0}
-              options={officers.map((officer) => ({
-                value: officer.id,
-                label: officer.name,
-              }))}
-            />
-          </Form.Item>
-          <div
-            style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}
-          >
-            <Button
-              onClick={() => {
-                setIsSendDrawerOpen(false);
-                setSelectedRequest(null);
-                sendForm.resetFields();
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="primary"
-              htmlType="submit"
-              loading={loading}
-              disabled={officers.length === 0}
-            >
-              Send
-            </Button>
-          </div>
-        </Form>
-      </Drawer>
-      <Drawer
-        title="Create New Request"
+        officers={officers}
+        onSubmit={async (officerId) => {
+          const success = await sendForSignature(
+            selectedRequest!.id,
+            officerId
+          );
+          if (success) fetchRequests();
+          return success;
+        }}
+        selectedRequest={selectedRequest}
+        loading={loading}
+      />
+      <CreateDrawer
         open={isCreateDrawerOpen}
-        onClose={() => {
-          setIsCreateDrawerOpen(false);
-          createForm.resetFields();
+        onClose={() => setIsCreateDrawerOpen(false)}
+        onSubmit={async (values) => {
+          const success = await createRequest(values);
+          if (success) fetchRequests();
+          return success;
         }}
-        footer={null}
-        width={400}
-      >
-        <Form
-          form={createForm}
-          layout="vertical"
-          onFinish={handleCreateRequest}
-        >
-          <Form.Item
-            label="Title"
-            name="title"
-            rules={[{ required: true, message: "Please enter a title" }]}
-          >
-            <Input placeholder="Enter request title" />
-          </Form.Item>
-          <Form.Item
-            label="Description"
-            name="description"
-            rules={[{ required: true, message: "Please enter a description" }]}
-          >
-            <Input placeholder="Enter request description" />
-          </Form.Item>
-          <Form.Item
-            label="Template File"
-            name="templateFile"
-            valuePropName="fileList"
-            getValueFromEvent={(e) => (Array.isArray(e) ? e : e.fileList)}
-            rules={[
-              { required: true, message: "Please upload a template file" },
-            ]}
-          >
-            <Upload accept=".doc,.docx" maxCount={1} beforeUpload={() => false}>
-              <Button icon={<UploadOutlined />}>Upload Template File</Button>
-            </Upload>
-          </Form.Item>
-          <div
-            style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}
-          >
-            <Button
-              onClick={() => {
-                setIsCreateDrawerOpen(false);
-                createForm.resetFields();
-              }}
-            >
-              Cancel
-            </Button>
-            <Button type="primary" htmlType="submit" loading={loading}>
-              Create
-            </Button>
-          </div>
-        </Form>
-      </Drawer>
-      <Drawer
-        title="Sign Request"
+        loading={loading}
+      />
+      <SignDrawer
         open={isSignDrawerOpen}
         onClose={() => {
           setIsSignDrawerOpen(false);
           setSelectedRequest(null);
-          signForm.resetFields();
+          setSigningRequestId(null);
         }}
-        footer={null}
-        width={400}
-      >
-        <Form form={signForm} layout="vertical" onFinish={handleSignRequest}>
-          <Form.Item
-            label="Select Signature"
-            name="signatureId"
-            rules={[{ required: true, message: "Please select a signature" }]}
-          >
-            <Select
-              placeholder="Select a signature"
-              style={{ width: "100%" }}
-              options={signatures.map((sig) => ({
-                value: sig.id,
-                label: (
-                  <div
-                    style={{ display: "flex", alignItems: "center", gap: 8 }}
-                  >
-                    <img
-                      src={`${backendUrl}${sig.url}`}
-                      alt={sig.name}
-                      style={{
-                        width: 40,
-                        height: 40,
-                        objectFit: "contain",
-                        border: "1px solid #ddd",
-                      }}
-                    />
-                    <span>{sig.name}</span>
-                  </div>
-                ),
-              }))}
-            />
-          </Form.Item>
-          <div
-            style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}
-          >
-            <Button
-              onClick={() => {
-                setIsSignDrawerOpen(false);
-                setSelectedRequest(null);
-                signForm.resetFields();
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="primary"
-              htmlType="submit"
-              loading={signingRequestId === selectedRequest?.id}
-            >
-              Sign
-            </Button>
-          </div>
-        </Form>
-      </Drawer>
-      <Drawer
-        title="Reject Request"
+        signatures={signatures}
+        onSubmit={async (signatureId) => {
+          setSigningRequestId(selectedRequest!.id);
+          const success = await signRequest(selectedRequest!.id, signatureId);
+          if (success) fetchRequests();
+          return success;
+        }}
+        selectedRequest={selectedRequest}
+        loading={signingRequestId === selectedRequest?.id}
+      />
+      <RejectDrawer
         open={isRejectDrawerOpen}
         onClose={() => {
           setIsRejectDrawerOpen(false);
           setSelectedRequest(null);
-          rejectForm.resetFields();
         }}
-        footer={null}
-        width={400}
-      >
-        <Form
-          form={rejectForm}
-          layout="vertical"
-          onFinish={handleRejectRequest}
-        >
-          <Form.Item
-            label="Rejection Reason"
-            name="rejectionReason"
-            rules={[
-              { required: true, message: "Please enter a rejection reason" },
-            ]}
-          >
-            <Input.TextArea
-              placeholder="Enter the reason for rejection"
-              rows={4}
-              style={{ resize: 'none' }}
-            />
-          </Form.Item>
-          <div
-            style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}
-          >
-            <Button
-              onClick={() => {
-                setIsRejectDrawerOpen(false);
-                setSelectedRequest(null);
-                rejectForm.resetFields();
-              }}
-            >
-              Cancel
-            </Button>
-            <Button type="primary" htmlType="submit" loading={loading}>
-              Reject
-            </Button>
-          </div>
-        </Form>
-      </Drawer>
+        onSubmit={async (rejectionReason) => {
+          const success = await rejectRequest(
+            selectedRequest!.id,
+            rejectionReason
+          );
+          if (success) fetchRequests();
+          return success;
+        }}
+        selectedRequest={selectedRequest}
+        loading={loading}
+      />
     </MainAreaLayout>
   );
 };
