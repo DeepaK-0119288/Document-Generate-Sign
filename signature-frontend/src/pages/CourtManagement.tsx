@@ -9,6 +9,7 @@ import {
   Select,
   Tag,
   Flex,
+  Input as Area,
 } from "antd";
 import CustomTable from "../components/CustomTable";
 import { courtClient } from "../store";
@@ -345,7 +346,7 @@ export const CourtManagement: React.FC = () => {
             name="description"
             rules={[{ required: true }]}
           >
-            <Area rows={5} placeholder="Enter Description" />
+            <Area placeholder="Enter Description" />
           </Form.Item>
           <Button
             type="primary"

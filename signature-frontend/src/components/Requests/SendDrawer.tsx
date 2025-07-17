@@ -11,7 +11,7 @@ interface SendDrawerProps {
   loading: boolean;
 }
 
-const SendDrawer: React.FC<SendDrawerProps> = ({ open, onClose, officers, onSubmit, selectedRequest, loading }) => {
+const SendDrawer: React.FC<SendDrawerProps> = ({ open, onClose, officers, onSubmit, loading }) => {
   const [form] = Form.useForm();
 
   const handleSubmit = async () => {

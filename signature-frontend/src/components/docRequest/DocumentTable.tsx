@@ -1,7 +1,7 @@
 import React from "react";
 import { Table, Space, Button, Tooltip } from "antd";
 import { EyeOutlined, DeleteOutlined, DownloadOutlined } from "@ant-design/icons";
-import { signStatusDisplay } from "../../libs/constants";
+import { signStatus, signStatusDisplay } from "../../libs/constants";
 import type { Request, Document, TemplateVariable } from "../../@types/interfaces/Request";
 
 interface DocumentTableProps {
@@ -50,13 +50,14 @@ const DocumentTable: React.FC<DocumentTableProps> = ({
         render: (status: number, record: Document) => (
           <Tooltip
             title={
-              status === 3                ? record.rejectionReason
+              status === 3
+                  ? record.rejectionReason
                   ? `Reason: ${record.rejectionReason}`
                   : "No reason provided"
                 : ""
             }
           >
-            <span>{signStatusDisplay[status] || "Unknown"}</span>
+            <span>{signStatusDisplay[status as signStatus] || "Unknown"}</span>
           </Tooltip>
         ),
       },

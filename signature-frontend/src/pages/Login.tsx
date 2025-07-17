@@ -27,7 +27,7 @@ const Login: React.FC = () => {
 
   const handleLogin = useCallback(async () => {
     try {
-      const response = await mainClient.request("POST", "/login", {
+       await mainClient.request("POST", "/login", {
         data: { email, password },
       });
       await getSession();

@@ -10,7 +10,7 @@ interface RejectDrawerProps {
   loading: boolean;
 }
 
-const RejectDrawer: React.FC<RejectDrawerProps> = ({ open, onClose, onSubmit, selectedRequest, loading }) => {
+const RejectDrawer: React.FC<RejectDrawerProps> = ({ open, onClose, onSubmit, loading }) => {
   const [form] = Form.useForm();
 
   const handleSubmit = async () => {

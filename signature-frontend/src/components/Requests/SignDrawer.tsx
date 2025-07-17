@@ -13,7 +13,7 @@ interface SignDrawerProps {
   loading: boolean;
 }
 
-const SignDrawer: React.FC<SignDrawerProps> = ({ open, onClose, signatures, onSubmit, selectedRequest, loading }) => {
+const SignDrawer: React.FC<SignDrawerProps> = ({ open, onClose, signatures, onSubmit, loading }) => {
   const [form] = Form.useForm();
 
   const handleSubmit = async () => {
